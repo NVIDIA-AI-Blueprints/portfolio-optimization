@@ -44,19 +44,19 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 echo "===================== Install Dependencies (extra: ${CUDA_EXTRA}) ====================="
-uv sync --extra "${CUDA_EXTRA}" --extra dev
+# The notebook toolchain (papermill, nbconvert, ipykernel) comes from the
+# `notebooks` dependency group so its versions are pinned by uv.lock. Every
+# tool below is invoked through `uv run`, which resolves from the project
+# environment -- a bare `papermill` would not be on PATH.
+uv sync --extra "${CUDA_EXTRA}" --extra dev --group notebooks
 
-echo "===================== Install Jupyter and other packages ====================="
-# Deliberately the container's `pip`, not `uv pip`: papermill and nbconvert are
-# invoked as bare commands below, so they must land on PATH. `uv pip` installs
-# into .venv, whose bin/ is not on PATH, giving "papermill: command not found".
-# The notebooks still execute against the uv environment via the portfolio-opt
-# kernel registered below.
-pip install jupyter jupyterlab ipykernel papermill nbconvert
+echo "===================== Toolchain versions ====================="
+uv run papermill --version
+uv run jupyter nbconvert --version
 
 echo "===================== Create Jupyter Kernel ====================="
 uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
-jupyter kernelspec list
+uv run jupyter kernelspec list
 
 cd notebooks
 
@@ -71,7 +71,7 @@ run_notebook() {
   echo "===================== Run ${input} notebook ====================="
   set +e
   # Elide base64 image payloads so the log stays readable.
-  papermill "$input" "$output" --kernel portfolio-opt --log-output --log-level DEBUG 2>&1 \
+  uv run papermill "$input" "$output" --kernel portfolio-opt --log-output --log-level DEBUG 2>&1 \
     | sed -E "s/\x27image\/png\x27: \x27[^\x27]*\x27/\x27image\/png\x27: \x27<elided>\x27/g" \
     | tee "${name}.papermill.log"
   local status="${PIPESTATUS[0]}"
@@ -97,7 +97,7 @@ convert_notebook() {
 
   echo "===================== Convert ${input} to HTML ====================="
   set +e
-  jupyter nbconvert --to html "$input" 2>&1 | tee "${name}.nbconvert.log"
+  uv run jupyter nbconvert --to html "$input" 2>&1 | tee "${name}.nbconvert.log"
   local status="${PIPESTATUS[0]}"
   set -e
 
