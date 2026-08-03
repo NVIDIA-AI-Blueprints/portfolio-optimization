@@ -431,8 +431,7 @@ class TestMeanVarianceOptimization:
         assert float(result["return"]) > -1.0
 
     @pytest.mark.gpu
-    def test_cuopt_python_var_limit_solves_socp(self, returns_dict):
-        pytest.importorskip("cuopt", reason="cuOpt GPU runtime required")
+    def test_cuopt_python_var_limit_solves_socp(self, returns_dict, require_cuopt_socp):
         variance_cap = self._equal_weight_variance_cap(returns_dict)
         params = MeanVarianceParameters(
             w_min=0.0,
