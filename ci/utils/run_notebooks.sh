@@ -47,7 +47,12 @@ echo "===================== Install Dependencies (extra: ${CUDA_EXTRA}) ========
 uv sync --extra "${CUDA_EXTRA}" --extra dev
 
 echo "===================== Install Jupyter and other packages ====================="
-uv pip install jupyter jupyterlab ipykernel papermill nbconvert
+# Deliberately the container's `pip`, not `uv pip`: papermill and nbconvert are
+# invoked as bare commands below, so they must land on PATH. `uv pip` installs
+# into .venv, whose bin/ is not on PATH, giving "papermill: command not found".
+# The notebooks still execute against the uv environment via the portfolio-opt
+# kernel registered below.
+pip install jupyter jupyterlab ipykernel papermill nbconvert
 
 echo "===================== Create Jupyter Kernel ====================="
 uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
