@@ -14,10 +14,16 @@
 # QCQP/SOCP support, so the variance-cap tests skip themselves there (see the
 # require_cuopt_socp fixture in tests/conftest.py). Use `cuda12` or
 # `cuda13-socp` to exercise those paths.
+#
+# When CUDA_EXTRA is a SOCP-capable extra, the installed cuOpt is asserted to
+# be >= 26.06 before the suite runs. Without that assertion a misresolved
+# environment would skip every SOCP test and still exit 0, so the lane would
+# report green while testing nothing.
 
 set -euo pipefail
 
 CUDA_EXTRA="${1:-cuda13}"
+SOCP_MIN="26.6"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
@@ -44,6 +50,24 @@ try:
 except ImportError:
     print('cuml NOT installed - skill benchmark tests will skip')
 "
+
+case "${CUDA_EXTRA}" in
+  *socp* | cuda12)
+    echo "===================== Assert SOCP-capable cuOpt ====================="
+    if ! uv run python -c "
+import sys, cuopt
+want = tuple(int(p) for p in '${SOCP_MIN}'.split('.'))
+got = tuple(int(p) for p in cuopt.__version__.split('.')[:2])
+print(f'cuopt {cuopt.__version__} (need >= ${SOCP_MIN})')
+sys.exit(0 if got >= want else 1)
+"; then
+      echo "ERROR: extra '${CUDA_EXTRA}' is meant to exercise SOCP but resolved a"
+      echo "       cuOpt older than ${SOCP_MIN}. The SOCP tests would skip and this"
+      echo "       lane would pass without testing anything."
+      exit 1
+    fi
+    ;;
+esac
 
 echo "===================== Run GPU test suite ====================="
 # -rs surfaces skip reasons, so a lane that silently skips everything

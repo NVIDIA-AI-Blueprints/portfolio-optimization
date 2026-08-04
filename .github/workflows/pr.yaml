@@ -143,6 +143,19 @@ jobs:
             nvcr.io/nvidia/pytorch:25.08-py3 \
             bash -lc 'ci/utils/run_notebooks.sh cuda13'
 
+      # The cuda13 extra tracks cuOpt 26.04, which has no QCQP/SOCP support, so
+      # the variance-cap tests skip in the pass above. Re-run them against the
+      # cuOpt-only 26.06 extra so that path is actually exercised. Runs last:
+      # it swaps the environment, and the steps above both want cuda13.
+      # Drop this once cuml-cu13 26.06 ships and cuda13 covers both.
+      - name: Run SOCP tests (cuOpt 26.06)
+        run: |
+          docker run --gpus all --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            nvcr.io/nvidia/pytorch:25.08-py3 \
+            bash -lc 'ci/utils/run_gpu_tests.sh cuda13-socp'
+
       - name: Upload notebook results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
