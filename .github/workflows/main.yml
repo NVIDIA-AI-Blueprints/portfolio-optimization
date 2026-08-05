@@ -34,7 +34,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: uv sync --extra dev
+        run: uv sync --group dev
 
       - name: Run tests
         run: uv run pytest tests/ -v
@@ -87,7 +87,7 @@ jobs:
               source "$HOME/.local/bin/env"
 
               echo "===================== Install Dependencies with uv ====================="
-              uv sync --extra cuda13 --extra dev
+              uv sync --extra cuda13 --group dev --group notebooks
 
 
               echo "===================== Install Jupyter and other packages ====================="
@@ -179,7 +179,7 @@ jobs:
               curl -LsSf https://astral.sh/uv/install.sh | sh
               export PATH="/root/.cargo/bin:$PATH"
               source "$HOME/.local/bin/env"
-              uv sync --extra cuda13 --extra dev
+              uv sync --extra cuda13 --group dev
               uv run pytest tests/ -v -m gpu
             '
 

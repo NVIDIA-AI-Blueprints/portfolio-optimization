@@ -2407,14 +2407,14 @@ cuda13 = [
 cuda13-socp = [
     { name = "cuopt-cu13", version = "26.6.0", source = { registry = "https://pypi.nvidia.com/" } },
 ]
+
+[package.dev-dependencies]
 dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
 ]
-
-[package.dev-dependencies]
-dev = [
+notebooks = [
     { name = "ipykernel" },
 ]
 
@@ -2429,18 +2429,20 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.8" },
     { name = "numpy", specifier = ">=2.0.0" },
     { name = "pandas", specifier = ">=2.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = "==4.3.0" },
     { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.9" },
     { name = "scikit-learn", specifier = ">=1.5" },
     { name = "seaborn", specifier = ">=0.13" },
     { name = "yfinance", specifier = ">=0.2.0" },
 ]
-provides-extras = ["dev", "cuda12", "cuda13", "cuda13-socp"]
+provides-extras = ["cuda12", "cuda13", "cuda13-socp"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "ipykernel", specifier = ">=7.1.0" }]
+dev = [
+    { name = "pre-commit", specifier = "==4.3.0" },
+    { name = "pytest", specifier = ">=9.0" },
+    { name = "ruff", specifier = "==0.15.9" },
+]
+notebooks = [{ name = "ipykernel", specifier = ">=7.1.0" }]
 
 [[package]]
 name = "pre-commit"

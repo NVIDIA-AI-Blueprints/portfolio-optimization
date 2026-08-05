@@ -59,10 +59,24 @@ There are many ways to contribute to the portfolio optimization developer exampl
 3. **Install Development Dependencies**
 
    ```bash
-   uv sync --extra dev
+   uv sync --group dev
    ```
 
    This automatically creates a virtual environment and installs the project in editable mode along with development tools like `ruff` and `pre-commit`.
+
+   **Extras vs. groups.** The project separates the two deliberately:
+
+   | Install as | Contains | Example |
+   | --- | --- | --- |
+   | `--extra` | genuine optional *runtime* features | `--extra cuda12`, `--extra cuda13`, `--extra cuda13-socp` |
+   | `--group dev` | developer tooling: `ruff`, `pytest`, `pre-commit` | `uv sync --group dev` |
+   | `--group notebooks` | `ipykernel`, for registering the Jupyter kernel | `uv sync --extra cuda13 --group notebooks` |
+
+   Only extras appear in the package's published metadata; groups ([PEP 735](https://peps.python.org/pep-0735/)) are local to this repository. `default-groups` is set to `[]`, so no group is installed unless you ask for it — an end user running `uv sync --extra cuda13` does not pull `ruff` or `pytest`. Combine them freely:
+
+   ```bash
+   uv sync --extra cuda13 --group notebooks --group dev
+   ```
 
 4. **Set Up Pre-commit Hooks**
 
@@ -92,7 +106,7 @@ For a consistent development environment with all GPU dependencies:
 docker run --gpus all -it --rm -v $(pwd):/workspace nvcr.io/nvidia/pytorch:25.08-py3
 cd /workspace
 curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync --extra dev
+uv sync --group dev
 ```
 
 ## Coding Standards

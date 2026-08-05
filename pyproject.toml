@@ -17,12 +17,9 @@ dependencies = [
     "pydantic>=2.12.5",
 ]
 
+# Extras are for genuine optional *runtime* features. Developer tooling lives
+# in [dependency-groups] below, which is not published in package metadata.
 [project.optional-dependencies]
-dev = [
-    "ruff==0.15.9",
-    "pytest>=9.0",
-    "pre-commit==4.3.0",
-]
 cuda12 = [
     "cuml-cu12==26.6.*",
     "cuopt-cu12==26.6.*",
@@ -69,6 +66,10 @@ portfolio_optimization = "src"
 
 [tool.uv]
 managed = true
+# uv installs the `dev` group by default. Opt out so an end-user or launchable
+# `uv sync --extra cuda13` stays lean and does not pull ruff/pytest/pre-commit;
+# contributors ask for it explicitly with `--group dev`.
+default-groups = []
 conflicts = [
     [
         { extra = "cuda12" },
@@ -98,7 +99,19 @@ cuopt-cu13 = { index = "nvidia" }
 requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
+# Developer-only dependencies (PEP 735). Install with `uv sync --group dev`.
+# These are deliberately not extras: they are not optional runtime features of
+# the package and should not appear in its published metadata.
 [dependency-groups]
 dev = [
+    "ruff==0.15.9",
+    "pytest>=9.0",
+    "pre-commit==4.3.0",
+]
+# Registering the Jupyter kernel is part of the documented end-user workflow,
+# not a dev-only task, so ipykernel is its own group rather than living in
+# `dev`. Previously it sat in `dev` and only worked because uv installs that
+# group by default; with default-groups disabled it must be requested.
+notebooks = [
     "ipykernel>=7.1.0",
 ]

@@ -100,15 +100,15 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 source $HOME/.local/bin/env  # (sh, bash, zsh)
 # source $HOME/.local/bin/env.fish  # (fish)
 
-# Install with CUDA-specific dependencies
-uv sync --extra cuda13 # full CUDA 13 stack currently tracks cuOpt/cuML 26.04
+# Install with CUDA-specific dependencies, plus the Jupyter kernel tooling
+uv sync --extra cuda13 --group notebooks # full CUDA 13 stack currently tracks cuOpt/cuML 26.04
 # On CUDA 12 hosts, use the full cuOpt/cuML 26.06 stack:
-# uv sync --extra cuda12
+# uv sync --extra cuda12 --group notebooks
 # For direct SOCP testing on CUDA 13 with cuOpt 26.06:
-# uv sync --extra cuda13-socp
+# uv sync --extra cuda13-socp --group notebooks
 
-# Optional: Install development tools
-uv sync --extra cuda13 --extra dev
+# Optional: Install development tools (ruff, pytest, pre-commit)
+uv sync --extra cuda13 --group notebooks --group dev
 
 # Create a Jupyter kernel for this environment
 uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
