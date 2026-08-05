@@ -102,3 +102,11 @@ build-backend = "setuptools.build_meta"
 dev = [
     "ipykernel>=7.1.0",
 ]
+# Toolchain for executing the example notebooks in CI (ci/utils/run_notebooks.sh).
+# Kept in a dependency group so the versions are resolved into uv.lock rather
+# than pulled unpinned from PyPI on every CI run.
+notebooks = [
+    "ipykernel>=7.1.0",
+    "nbconvert>=7.16",
+    "papermill>=2.6",
+]

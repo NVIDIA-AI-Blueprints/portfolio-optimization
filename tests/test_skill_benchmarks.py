@@ -57,7 +57,7 @@ def test_build_optimal_is_non_degenerate(prepared, thresholds):
     assert not fails, fails
 
 
-def test_socp_variance_limit_solves(prepared, thresholds):
+def test_socp_variance_limit_solves(prepared, thresholds, require_cuopt_socp):
     metrics = bw.run_socp_variance_limit(prepared["returns_dict"])
     fails = bw.check_socp_variance_limit(metrics, thresholds["socp_variance_limit"])
     assert not fails, fails

@@ -75,98 +75,7 @@ jobs:
             -v "$(pwd):/workspace" \
             -w /workspace \
             nvcr.io/nvidia/pytorch:25.08-py3 \
-            bash -lc '
-              set -euo pipefail
-              echo "===================== Python and GPU Info ====================="
-              python --version
-              nvidia-smi
-
-              echo "===================== Install uv ====================="
-              curl -LsSf https://astral.sh/uv/install.sh | sh
-              export PATH="/root/.cargo/bin:$PATH"
-              source "$HOME/.local/bin/env"
-
-              echo "===================== Install Dependencies with uv ====================="
-              uv sync --extra cuda13 --extra dev
-
-
-              echo "===================== Install Jupyter and other packages ====================="
-              pip install jupyter jupyterlab ipykernel papermill nbconvert
-
-              echo "===================== Create Jupyter Kernel ====================="
-              uv run python -m ipykernel install --user --name=portfolio-opt --display-name "Portfolio Optimization"
-
-              echo "===================== List Jupyter Kernel ====================="
-              jupyter kernelspec list
-
-              echo "===================== Change to notebooks directory ====================="
-              cd notebooks
-
-              overall_status=0
-              : > notebook_status.txt
-
-              run_notebook() {
-                local input="$1"
-                local output="$2"
-                local name="${input%.ipynb}"
-
-                echo "===================== Run ${input} notebook ====================="
-                set +e
-                papermill "$input" "$output" --kernel portfolio-opt --log-output --log-level DEBUG 2>&1 \
-                  | sed -E "s/\x27image\/png\x27: \x27[^\x27]*\x27/\x27image\/png\x27: \x27<elided>\x27/g" \
-                  | tee "${name}.papermill.log"
-                local status="${PIPESTATUS[0]}"
-                set -e
-
-                if [ "$status" -eq 0 ]; then
-                  echo "${input},PASS" | tee -a notebook_status.txt
-                else
-                  echo "${input},FAIL(${status})" | tee -a notebook_status.txt
-                  overall_status=1
-                fi
-              }
-
-              convert_notebook() {
-                local input="$1"
-                local name="${input%.ipynb}"
-
-                if [ ! -s "$input" ]; then
-                  echo "nbconvert:${input},SKIP(no output notebook)" | tee -a notebook_status.txt
-                  overall_status=1
-                  return
-                fi
-
-                echo "===================== Convert ${input} to HTML ====================="
-                set +e
-                jupyter nbconvert --to html "$input" 2>&1 | tee "${name}.nbconvert.log"
-                local status="${PIPESTATUS[0]}"
-                set -e
-
-                if [ "$status" -eq 0 ]; then
-                  echo "nbconvert:${input},PASS" | tee -a notebook_status.txt
-                else
-                  echo "nbconvert:${input},FAIL(${status})" | tee -a notebook_status.txt
-                  overall_status=1
-                fi
-              }
-
-              run_notebook mean_variance_basic.ipynb mean_variance_basic_result.ipynb
-              run_notebook cvar_basic.ipynb cvar_basic_result.ipynb
-              run_notebook efficient_frontier.ipynb efficient_frontier_result.ipynb
-              run_notebook rebalancing_strategies.ipynb rebalancing_strategies_result.ipynb
-              run_notebook launchable.ipynb launchable_brev_result.ipynb
-
-              echo "===================== Convert notebooks to HTML ====================="
-              convert_notebook mean_variance_basic_result.ipynb
-              convert_notebook cvar_basic_result.ipynb
-              convert_notebook efficient_frontier_result.ipynb
-              convert_notebook rebalancing_strategies_result.ipynb
-              convert_notebook launchable_brev_result.ipynb
-
-              echo "===================== Notebook status summary ====================="
-              cat notebook_status.txt
-              exit "$overall_status"
-            '
+            bash -lc 'ci/utils/run_notebooks.sh cuda13'
 
       - name: Run GPU pytest suite
         run: |
@@ -174,14 +83,19 @@ jobs:
             -v "$(pwd):/workspace" \
             -w /workspace \
             nvcr.io/nvidia/pytorch:25.08-py3 \
-            bash -lc '
-              set -euo pipefail
-              curl -LsSf https://astral.sh/uv/install.sh | sh
-              export PATH="/root/.cargo/bin:$PATH"
-              source "$HOME/.local/bin/env"
-              uv sync --extra cuda13 --extra dev
-              uv run pytest tests/ -v -m gpu
-            '
+            bash -lc 'ci/utils/run_gpu_tests.sh cuda13'
+
+      # The cuda13 extra tracks cuOpt 26.04, which has no QCQP/SOCP support, so
+      # the variance-cap tests skip in the pass above. Re-run them against the
+      # cuOpt-only 26.06 extra so that path is actually exercised.
+      # Drop this once cuml-cu13 26.06 ships and cuda13 covers both.
+      - name: Run SOCP tests (cuOpt 26.06)
+        run: |
+          docker run --gpus all --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            nvcr.io/nvidia/pytorch:25.08-py3 \
+            bash -lc 'ci/utils/run_gpu_tests.sh cuda13-socp'
 
       - name: Verify results
         if: success()

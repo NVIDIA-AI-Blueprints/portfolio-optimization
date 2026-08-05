@@ -74,14 +74,131 @@ jobs:
       - name: Validate agent skills and plugin manifests
         run: ./ci/utils/validate_skills.sh
 
+  # Decide whether the expensive GPU lane is warranted. Path filtering lives
+  # here rather than in `on.pull_request.paths` so the job still reports a
+  # conclusion when it is not needed -- a workflow-level path filter makes the
+  # check never appear, which leaves a required check pending forever.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      gpu: ${{ steps.filter.outputs.gpu }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect GPU-relevant changes
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | grep -qE '^(src/|tests/|notebooks/|ci/utils/run_(gpu_tests|notebooks)\.sh|pyproject\.toml|uv\.lock|\.github/workflows/pr\.yaml)'; then
+            echo "GPU-relevant paths changed; GPU lane will run."
+            echo "gpu=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No GPU-relevant paths changed; skipping GPU lane."
+            echo "gpu=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  gpu-tests:
+    needs: [changes]
+    # Never expose the self-hosted GPU runner to code from a fork.
+    if: >-
+      needs.changes.outputs.gpu == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: arc-runners-org-nvidia-ai-bp-1-gpu
+    steps:
+      # Credentials are deliberately persisted: `git lfs pull` below runs
+      # outside the action and needs the checkout credential helper.
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4 # zizmor: ignore[artipacked]
+
+      - name: Install Git LFS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
+
+      - name: Pull Git LFS files
+        run: git lfs pull
+
+      - name: Run GPU pytest suite
+        run: |
+          docker run --gpus all --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            nvcr.io/nvidia/pytorch:25.08-py3 \
+            bash -lc 'ci/utils/run_gpu_tests.sh cuda13'
+
+      - name: Execute notebooks
+        run: |
+          docker run --gpus all --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            nvcr.io/nvidia/pytorch:25.08-py3 \
+            bash -lc 'ci/utils/run_notebooks.sh cuda13'
+
+      # The cuda13 extra tracks cuOpt 26.04, which has no QCQP/SOCP support, so
+      # the variance-cap tests skip in the pass above. Re-run them against the
+      # cuOpt-only 26.06 extra so that path is actually exercised. Runs last:
+      # it swaps the environment, and the steps above both want cuda13.
+      # Drop this once cuml-cu13 26.06 ships and cuda13 covers both.
+      - name: Run SOCP tests (cuOpt 26.06)
+        run: |
+          docker run --gpus all --rm \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            nvcr.io/nvidia/pytorch:25.08-py3 \
+            bash -lc 'ci/utils/run_gpu_tests.sh cuda13-socp'
+
+      - name: Upload notebook results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: pr-notebook-results
+          path: |
+            notebooks/*_result.html
+            notebooks/*.papermill.log
+            notebooks/*.nbconvert.log
+            notebooks/notebook_status.txt
+          retention-days: 7
+
   pr-builder:
     if: always()
-    needs: [lockfile-check, install-and-test, validate-skills]
+    needs: [lockfile-check, install-and-test, validate-skills, changes, gpu-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
+        env:
+          LOCKFILE: ${{ needs.lockfile-check.result }}
+          TESTS: ${{ needs.install-and-test.result }}
+          SKILLS: ${{ needs.validate-skills.result }}
+          CHANGES: ${{ needs.changes.result }}
+          GPU: ${{ needs.gpu-tests.result }}
         run: |
-          if [[ "${{ needs.lockfile-check.result }}" != "success" || "${{ needs.install-and-test.result }}" != "success" || "${{ needs.validate-skills.result }}" != "success" ]]; then
+          set -euo pipefail
+          status=0
+          for job in LOCKFILE TESTS SKILLS CHANGES; do
+            result="${!job}"
+            echo "${job}: ${result}"
+            if [[ "$result" != "success" ]]; then
+              status=1
+            fi
+          done
+          # gpu-tests is skipped when no GPU-relevant path changed, and when the
+          # PR comes from a fork (the self-hosted runner is not exposed to forks).
+          # Both are legitimate; only an actual failure should block.
+          echo "GPU: ${GPU}"
+          if [[ "$GPU" != "success" && "$GPU" != "skipped" ]]; then
+            status=1
+          fi
+          if [[ "$status" -ne 0 ]]; then
             echo "One or more required jobs failed."
             exit 1
           fi
+          echo "All required jobs passed."
