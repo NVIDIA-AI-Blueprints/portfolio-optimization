@@ -12,8 +12,9 @@ import socket
 import numpy as np
 import pandas as pd
 import pytest
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-from experiments.simulator_comparison import devices as devices_module
+from experiments.simulator_comparison import devices as devices_module, devices_report
 from experiments.simulator_comparison.config import DevicesConfig, ExperimentConfig
 from experiments.simulator_comparison.devices import (
     SERVICE_ENVIRONMENT,
@@ -29,6 +30,7 @@ from experiments.simulator_comparison.devices_report import (
     DEVICE_RATIO,
     device_tables,
     read_device_results,
+    write_device_figures,
 )
 from experiments.simulator_comparison.rebalancing import (
     calibrated_cvar_params,
@@ -349,3 +351,26 @@ def test_a_single_session_is_refused(sessions, tmp_path):
     )
     with pytest.raises(ValueError, match="holds no \\['CPU'\\] session"):
         read_device_results(path)
+
+
+def test_every_text_of_the_device_figures_lies_inside_the_figure(
+    sessions, monkeypatch, tmp_path
+):
+    """No title, subtitle, label, or footnote of a speed figure runs past its edges."""
+    device_config, _, _, _ = sessions
+    figures = {}
+
+    def record(figure, directory, name):
+        figures[name] = figure
+        return []
+
+    monkeypatch.setattr(devices_report, "_save", record)
+    write_device_figures(device_tables(device_config.output), tmp_path)
+    assert set(figures) == {"runtime", "runtime_devices", "solvers"}
+    for name, figure in figures.items():
+        canvas = FigureCanvasAgg(figure)
+        canvas.draw()
+        drawn = figure.get_tightbbox(canvas.get_renderer())
+        assert drawn.x0 >= 0 and drawn.y0 >= 0, name
+        assert drawn.x1 <= figure.get_figwidth(), name
+        assert drawn.y1 <= figure.get_figheight(), name

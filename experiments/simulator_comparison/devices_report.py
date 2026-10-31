@@ -504,13 +504,13 @@ def plot_solvers(table: pd.DataFrame, directory: Path) -> list[Path]:
         rows.append(
             (label, SOLVER_COLORS[row.solver], row.estimate, row.ci_low, row.ci_high)
         )
-    _seconds_rows(ax, rows, "solve", SECONDS_TICK_STEPS)
+    _seconds_rows(ax, rows, "solve without setup", SECONDS_TICK_STEPS)
     first = table.iloc[0]
     _panel_title(
         ax,
         "Seconds per solve of a rebalancing decision's problem",
         f"mean over {int(table['trials'].min())} trials with its 95 % interval;"
-        " solves without warm-up, setup excluded",
+        " solves without warm-up",
     )
     _footnote(
         figure,
