@@ -39,7 +39,8 @@ jobs:
         run: uv sync --group dev --extra experiments
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        # This runner has no GPU; the gpu-marked tests run in run-notebooks below.
+        run: uv run pytest tests/ -v -m "not gpu"
 
   run-notebooks:
     needs: [test]

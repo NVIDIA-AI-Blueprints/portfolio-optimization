@@ -61,7 +61,8 @@ jobs:
         run: uv run python -c "import portfolio_optimization"
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        # This runner has no GPU; the gpu-marked tests run in gpu-tests below.
+        run: uv run pytest tests/ -v -m "not gpu"
 
   validate-skills:
     runs-on: ubuntu-latest
