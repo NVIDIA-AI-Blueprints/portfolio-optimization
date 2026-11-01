@@ -42,7 +42,6 @@ from .blog_style import (
     DECADE_TICK_STEPS,
     SECONDS_TICK_STEPS,
     TEXT_SIZE,
-    _footnote,
     _headline,
     _panel_title,
     _seconds_rows,
@@ -150,15 +149,6 @@ def hardware(identity: dict) -> dict[str, object]:
         "cpu_cores": host["physical_cores"],
         "gpu": gpu["name"],
     }
-
-
-def _hardware_text(table: pd.DataFrame) -> str:
-    first = table.iloc[0]
-    sockets = int(first["cpu_sockets"])
-    return (
-        f"CPU: {f'{sockets} × ' if sockets > 1 else ''}{first['cpu']}, "
-        f"{int(first['cpu_cores'])} cores in all. GPU: one {first['gpu']}."
-    )
 
 
 def _mean(values: pd.Series) -> dict:
@@ -356,19 +346,11 @@ def plot_runtime(table: pd.DataFrame, directory: Path) -> list[Path]:
         "call",
         DECADE_TICK_STEPS,
     )
-    jointfm = table[table["fit_type"] == "jointfm"].iloc[0]
     _panel_title(
         ax,
         "Seconds per scenario-generation call",
         f"mean over {int(table['trials'].min())} trials with its 95 % interval;"
         " calls without warm-up",
-    )
-    _footnote(
-        figure,
-        f"A call draws {int(jointfm['num_scen']):,} next-day scenarios of "
-        f"{int(jointfm['assets'])} assets from a rebalancing decision's look-back "
-        "window\n(Historical replays the window's days); JointFM's call includes "
-        f"the HTTP round trip to its local service.\n{_hardware_text(table)}",
     )
     _headline(figure, "Scenario generation on CPU and GPU: seconds per call")
     _style_text(figure)
@@ -468,20 +450,11 @@ def plot_stages(table: pd.DataFrame, directory: Path) -> list[Path]:
     ax.set_xlim(-STACK_BAR_WIDTH, len(DEVICE_ORDER) - 1 + STACK_RIGHT_ROOM)
     ax.set_ylim(0, top)
     ax.set_ylabel("seconds per decision", color=INK_SECONDARY, fontsize=TEXT_SIZE)
-    first = table.iloc[0]
     _panel_title(
         ax,
         "Seconds per rebalancing decision, by stage",
         f"mean over {int(seconds['trials'].min())} trials; the whisker spans the "
         "total's 95 % interval; decisions without warm-up",
-    )
-    _footnote(
-        figure,
-        f"A decision draws {int(first['num_scen']):,} JointFM scenarios of "
-        f"{int(first['assets'])} assets and solves the Mean-CVaR problem on them;\n"
-        "the scenarios include the HTTP round trip to JointFM's local service, the "
-        "optimizer the problem's setup and solve.\nThe ratio is the median over "
-        f"trials of CPU seconds over GPU seconds.\n{_hardware_text(table)}",
     )
     _headline(figure, "A rebalancing decision on CPU and GPU")
     _style_text(figure)
@@ -505,20 +478,11 @@ def plot_solvers(table: pd.DataFrame, directory: Path) -> list[Path]:
             (label, SOLVER_COLORS[row.solver], row.estimate, row.ci_low, row.ci_high)
         )
     _seconds_rows(ax, rows, "solve without setup", SECONDS_TICK_STEPS)
-    first = table.iloc[0]
     _panel_title(
         ax,
         "Seconds per solve of a rebalancing decision's problem",
         f"mean over {int(table['trials'].min())} trials with its 95 % interval;"
         " solves without warm-up",
-    )
-    _footnote(
-        figure,
-        f"Every solver solves the same {int(first['decisions'])} problems of "
-        f"{int(first['num_scen']):,} scenarios of {int(first['assets'])} assets; "
-        f"its weights differ from {reference}'s\nby at most "
-        f"{table['max_weight_difference'].max():.1g}. The ratio is the median over "
-        f"trials of the solver's seconds over {reference}'s.\n{_hardware_text(table)}",
     )
     _headline(figure, "Solving the Mean-CVaR problem on CPU and GPU")
     _style_text(figure)

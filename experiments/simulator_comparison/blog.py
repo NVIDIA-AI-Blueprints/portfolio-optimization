@@ -67,7 +67,6 @@ from .analysis import (
 )
 from .blog_style import (
     BLOG_NAMES,
-    SUBTITLE_SIZE,
     TEXT_SIZE,
     _axis_labels,
     _headline,
@@ -829,13 +828,6 @@ def plot_risk_return(
         "Return against risk, with cash",
         f"mean over {trials} trials; up and left is better",
     )
-    figure.supxlabel(
-        "The line mixes cash at the risk-free rate with the portfolio whose line "
-        "from cash is steepest,\ndashed where the mix borrows cash. A dot in the "
-        "shaded area earns less than the mix of equal volatility.",
-        color=MUTED,
-        fontsize=SUBTITLE_SIZE,
-    )
     _headline(figure, "Rebalanced portfolios: return against volatility, with cash")
     _style_text(figure)
     return _save(figure, directory, "risk_return")
@@ -894,14 +886,6 @@ def plot_performance(
         _panel_title(ax, title, f"{better} is better")
     for ax in list(axes.flat)[len(PERFORMANCE_METRICS) :]:
         ax.set_visible(False)
-    trials = int(performance["trials"].iloc[0])
-    figure.supxlabel(
-        f"Mean over {trials} trials with its 95 % bootstrap interval; each label "
-        f"counts the trials in which the simulator did better than "
-        f"{reference.inline_label}.",
-        color=MUTED,
-        fontsize=SUBTITLE_SIZE,
-    )
     _headline(figure, "Performance and risk of the rebalanced portfolios")
     _style_text(figure)
     return _save(figure, directory, "performance")

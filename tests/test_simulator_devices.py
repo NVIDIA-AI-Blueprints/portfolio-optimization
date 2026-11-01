@@ -356,7 +356,7 @@ def test_a_single_session_is_refused(sessions, tmp_path):
 def test_every_text_of_the_device_figures_lies_inside_the_figure(
     sessions, monkeypatch, tmp_path
 ):
-    """No title, subtitle, label, or footnote of a speed figure runs past its edges."""
+    """No title, subtitle, or label of a speed figure runs past its edges."""
     device_config, _, _, _ = sessions
     figures = {}
 

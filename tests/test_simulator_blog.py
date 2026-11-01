@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from experiments.simulator_comparison import blog as blog_figures, devices_report
 from experiments.simulator_comparison.blog import (
     BLOG_RANKING_SCORES,
     BLOG_SKILL_SCORES,
@@ -484,6 +485,24 @@ def test_the_speed_figures_draw_the_device_reports_tables(blog):
             table,
             check_dtype=False,
         )
+
+
+def test_no_blog_figure_draws_a_description_below_its_axes(blog, monkeypatch):
+    """A figure's description lives in the post's caption, never below its axes."""
+    config, _ = blog
+    figures = {}
+
+    def record(figure, directory, name):
+        figures[name] = figure
+        return []
+
+    monkeypatch.setattr(blog_figures, "_save", record)
+    monkeypatch.setattr(devices_report, "_save", record)
+    write_blog(config, config.output.with_name("devices.parquet"))
+    assert set(figures) == set(FIGURES)
+    assert {name: figure.get_supxlabel() for name, figure in figures.items()} == (
+        dict.fromkeys(FIGURES, "")
+    )
 
 
 def test_a_rate_file_other_than_the_backtests_is_refused(blog, tmp_path):

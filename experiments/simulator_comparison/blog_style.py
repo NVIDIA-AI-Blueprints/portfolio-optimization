@@ -75,10 +75,6 @@ def _axis_labels(ax, x: str, y: str) -> None:
     ax.set_ylabel(y, color=INK_SECONDARY, fontsize=TEXT_SIZE)
 
 
-def _footnote(figure, text: str) -> None:
-    figure.supxlabel(text, color=MUTED, fontsize=SUBTITLE_SIZE)
-
-
 def _seconds_rows(
     ax,
     rows: Sequence[tuple[str, str, float, float, float]],
