@@ -25,16 +25,17 @@ cd "$REPO_ROOT"
 # artifact upload and the QA verification step in main.yml reference these
 # exact filenames.
 #
-# launchable.ipynb is deliberately excluded: its setup cell runs
-# `uv sync --extra <cuda>` on its own, which -- since default-groups is empty
-# -- uninstalls ipykernel/papermill from the very venv driving the kernel and
-# kills the run. That cell is meant for a fresh Brev/launchable environment,
-# not a CI venv that already has the notebook toolchain installed.
+# launchable.ipynb runs as launchable_ci.ipynb, a copy without its setup cell:
+# that cell runs `uv sync --extra <cuda>` on its own, which -- since
+# default-groups is empty -- uninstalls ipykernel/papermill from the very venv
+# driving the kernel and kills the run. That cell is meant for a fresh
+# Brev/launchable environment, not a CI venv that already has the toolchain.
 NOTEBOOKS=(
   "mean_variance_basic:mean_variance_basic_result"
   "cvar_basic:cvar_basic_result"
   "efficient_frontier:efficient_frontier_result"
   "rebalancing_strategies:rebalancing_strategies_result"
+  "launchable_ci:launchable_result"
 )
 
 echo "===================== Python and GPU Info ====================="
@@ -64,6 +65,20 @@ uv run python -m ipykernel install --user --name=portfolio-opt --display-name "P
 uv run jupyter kernelspec list
 
 cd notebooks
+
+uv run python - <<'PY'
+import json
+
+with open("launchable.ipynb", encoding="utf-8") as f:
+    nb = json.load(f)
+nb["cells"] = [
+    c
+    for c in nb["cells"]
+    if not (c["cell_type"] == "code" and "uv sync" in "".join(c["source"]))
+]
+with open("launchable_ci.ipynb", "w", encoding="utf-8") as f:
+    json.dump(nb, f, ensure_ascii=False, indent=1)
+PY
 
 overall_status=0
 : > notebook_status.txt

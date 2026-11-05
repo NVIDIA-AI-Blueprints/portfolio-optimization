@@ -108,6 +108,7 @@ jobs:
           test -s notebooks/cvar_basic_result.html
           test -s notebooks/efficient_frontier_result.html
           test -s notebooks/rebalancing_strategies_result.html
+          test -s notebooks/launchable_result.html
           ls -lh notebooks/*result* notebooks/*.papermill.log notebooks/*.nbconvert.log notebooks/notebook_status.txt
           cd notebooks
           echo "$TEST_DOCKER_PULL_KEY" |docker login nvcr.io --username  '$oauthtoken' --password-stdin
@@ -115,6 +116,7 @@ jobs:
             -v ./cvar_basic_result.html:/app/input/quantitative_portfolio_optimization/cvar_basic.html  \
             -v ./efficient_frontier_result.html:/app/input/quantitative_portfolio_optimization/efficient_frontier.html  \
             -v ./rebalancing_strategies_result.html:/app/input/quantitative_portfolio_optimization/rebalancing_strategies.html  \
+            -v ./launchable_result.html:/app/input/quantitative_portfolio_optimization/launchable_brev_result.html  \
             -v "$(pwd):/workspace" \
             nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest \
             pytest -m quantitative_portfolio_optimization --disable-warnings --html=/workspace/quantitative_portfolio_optimization.html --self-contained-html
@@ -134,6 +136,8 @@ jobs:
              notebooks/efficient_frontier_result.ipynb
              notebooks/rebalancing_strategies_result.html
              notebooks/rebalancing_strategies_result.ipynb
+             notebooks/launchable_result.html
+             notebooks/launchable_result.ipynb
              notebooks/quantitative_portfolio_optimization.html
              notebooks/*.papermill.log
              notebooks/*.nbconvert.log
