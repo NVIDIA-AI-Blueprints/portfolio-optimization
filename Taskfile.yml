@@ -43,6 +43,35 @@ tasks:
       - echo "default succeeded"
     silent: true
 
+  stats:
+    desc: >-
+      Show lines added and removed by all authors' commits on the current
+      branch today, over the last 7, 28, and 365 calendar days (each window
+      includes today), and over the whole history, with the average per
+      calendar day
+    set: [errexit, nounset, pipefail]
+    cmds:
+      - |
+        TODAY_START="$(git rev-parse --since='0 days ago 00:00' | sed 's/^--max-age=//')"
+        FIRST_DAY="$(git log --format='%ct %cd' --date=format-local:%Y-%m-%d | sort -n | awk 'NR == 1 { print $2 }')"
+        FIRST_DAY_START="$(git rev-parse --since="$FIRST_DAY 00:00" | sed 's/^--max-age=//')"
+        # Rounding absorbs the hour a daylight-saving switch adds to or removes from a day.
+        ALL_DAYS=$(( (TODAY_START - FIRST_DAY_START + 43200) / 86400 + 1 ))
+        echo "Lines added and removed by the commits on $(git rev-parse --abbrev-ref HEAD) since $FIRST_DAY, all authors (merge commits and binary files not counted)"
+        printf '%-7s %5s %9s %9s %9s %10s %12s\n' window days added removed net added/day removed/day
+        for WINDOW in 1 7 28 365 all; do
+          case "$WINDOW" in
+            1) LABEL=today DAYS=1 ;;
+            all) LABEL=all DAYS="$ALL_DAYS" ;;
+            *) LABEL="${WINDOW}d" DAYS="$WINDOW" ;;
+          esac
+          git log --since="$((DAYS - 1)) days ago 00:00" --numstat --pretty=tformat: \
+            | awk -v label="$LABEL" -v days="$DAYS" '$1 != "-" { added += $1; removed += $2 }
+                END { printf "%-7s %5d %9d %9d %9d %10.1f %12.1f\n", label, days, added, removed, added - removed, added / days, removed / days }'
+        done
+      - echo "stats succeeded"
+    silent: true
+
   setup:
     desc: >-
       Reconcile uv.lock with pyproject.toml without upgrading pinned versions,
