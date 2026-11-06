@@ -110,6 +110,8 @@ jobs:
           test -s notebooks/rebalancing_strategies_result.html
           ls -lh notebooks/*result* notebooks/*.papermill.log notebooks/*.nbconvert.log notebooks/notebook_status.txt
           cd notebooks
+          # launchable.ipynb is not run in CI (see ci/utils/run_notebooks.sh), so its
+          # launchable_brev case has no result HTML to check.
           echo "$TEST_DOCKER_PULL_KEY" |docker login nvcr.io --username  '$oauthtoken' --password-stdin
           docker run --rm \
             -v ./cvar_basic_result.html:/app/input/quantitative_portfolio_optimization/cvar_basic.html  \
@@ -117,7 +119,7 @@ jobs:
             -v ./rebalancing_strategies_result.html:/app/input/quantitative_portfolio_optimization/rebalancing_strategies.html  \
             -v "$(pwd):/workspace" \
             nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest \
-            pytest -m quantitative_portfolio_optimization --disable-warnings --html=/workspace/quantitative_portfolio_optimization.html --self-contained-html
+            pytest -m quantitative_portfolio_optimization -k "not launchable_brev" --disable-warnings --html=/workspace/quantitative_portfolio_optimization.html --self-contained-html
 
 
       - name: Upload notebook results as artifacts
