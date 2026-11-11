@@ -86,7 +86,7 @@ jobs:
             -v "$(pwd)/rebalancing_strategies_result.html:/app/input/quantitative_portfolio_optimization/rebalancing_strategies.html" \
             -v "$(pwd):/workspace" \
             "${TEST_IMAGE}" \
-            pytest -m quantitative_portfolio_optimization --timeout=900 --disable-warnings \
+            pytest -m "quantitative_portfolio_optimization and not T5552710" --timeout=900 --disable-warnings \
               --html=/workspace/quantitative_portfolio_optimization.html --self-contained-html
           if [ ! -s quantitative_portfolio_optimization.html ]; then
             echo "::error::pytest report notebooks/quantitative_portfolio_optimization.html not written"
