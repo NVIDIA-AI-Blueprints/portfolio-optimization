@@ -9,8 +9,9 @@
 # per-PR lane (.github/workflows/pr.yaml) call this so the two cannot drift --
 # an inline copy in each workflow is what produced the stale release-2512.yml.
 #
-# Usage: ci/utils/run_notebooks.sh [CUDA_EXTRA]
-#   CUDA_EXTRA  uv extra providing the GPU stack (default: cuda13)
+# Usage: [WITH_LAUNCHABLE=1] ci/utils/run_notebooks.sh [CUDA_EXTRA]
+#   CUDA_EXTRA       uv extra providing the GPU stack (default: cuda13)
+#   WITH_LAUNCHABLE  1 also runs launchable.ipynb (default: 0)
 #
 # Exits non-zero if any notebook fails to execute or convert. A per-notebook
 # PASS/FAIL summary is written to notebooks/notebook_status.txt.
@@ -25,17 +26,18 @@ cd "$REPO_ROOT"
 # artifact upload and the QA verification step in main.yml reference these
 # exact filenames.
 #
-# launchable.ipynb is deliberately excluded: its setup cell runs
-# `uv sync --extra <cuda>` on its own, which -- since default-groups is empty
-# -- uninstalls ipykernel/papermill from the very venv driving the kernel and
-# kills the run. That cell is meant for a fresh Brev/launchable environment,
-# not a CI venv that already has the notebook toolchain installed.
+# launchable.ipynb runs only with WITH_LAUNCHABLE=1 (the QA lane, main.yml),
+# and last: its setup cell runs its own exact `uv sync --extra <cuda>
+# --group notebooks` in this venv, which drops the dev group.
 NOTEBOOKS=(
   "mean_variance_basic:mean_variance_basic_result"
   "cvar_basic:cvar_basic_result"
   "efficient_frontier:efficient_frontier_result"
   "rebalancing_strategies:rebalancing_strategies_result"
 )
+if [ "${WITH_LAUNCHABLE:-0}" = "1" ]; then
+  NOTEBOOKS+=("launchable:launchable_brev_result")
+fi
 
 echo "===================== Python and GPU Info ====================="
 python --version

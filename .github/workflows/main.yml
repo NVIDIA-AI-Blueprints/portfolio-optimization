@@ -48,6 +48,7 @@ jobs:
       - name: Execute notebooks
         run: |
           docker run --gpus all --rm \
+            -e WITH_LAUNCHABLE=1 \
             -v "$(pwd):/workspace" \
             -w /workspace \
             "$NOTEBOOK_IMAGE" \
@@ -65,7 +66,7 @@ jobs:
             exit 1
           fi
           missing=0
-          for f in cvar_basic_result.html efficient_frontier_result.html rebalancing_strategies_result.html; do
+          for f in cvar_basic_result.html efficient_frontier_result.html rebalancing_strategies_result.html launchable_brev_result.html; do
             if [ ! -s "$f" ]; then
               echo "Missing notebook result: notebooks/$f"
               missing=1
@@ -81,6 +82,7 @@ jobs:
             -v "$(pwd)/cvar_basic_result.html:/app/input/quantitative_portfolio_optimization/cvar_basic.html:ro" \
             -v "$(pwd)/efficient_frontier_result.html:/app/input/quantitative_portfolio_optimization/efficient_frontier.html:ro" \
             -v "$(pwd)/rebalancing_strategies_result.html:/app/input/quantitative_portfolio_optimization/rebalancing_strategies.html:ro" \
+            -v "$(pwd)/launchable_brev_result.html:/app/input/quantitative_portfolio_optimization/launchable_brev_result.html:ro" \
             -v "$(pwd):/workspace" \
             "$TEST_IMAGE" \
             pytest -m quantitative_portfolio_optimization \
