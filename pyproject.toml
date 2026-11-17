@@ -20,16 +20,24 @@ dependencies = [
 # Extras are for genuine optional *runtime* features. Developer tooling lives
 # in [dependency-groups] below, which is not published in package metadata.
 [project.optional-dependencies]
+# CuPy 13.x does not load the CUDA libraries that ship as pip wheels (e.g.
+# libnvrtc from nvidia-cuda-nvrtc), so on hosts without a matching system CUDA
+# toolkit the first JIT kernel (cuML KDE, etc.) fails with
+# "libnvrtc.so.NN: cannot open shared object file". CuPy 14 finds them via
+# cuda-pathfinder.
 cuda12 = [
     "cuml-cu12==26.6.*",
     "cuopt-cu12==26.6.*",
+    "cupy-cuda12x>=14",
 ]
 cuda13 = [
     "cuml-cu13==26.4.*",
     "cuopt-cu13==26.4.*",
+    "cupy-cuda13x>=14",
 ]
 cuda13-socp = [
     "cuopt-cu13==26.6.*",
+    "cupy-cuda13x>=14",
 ]
 
 [tool.ruff]
