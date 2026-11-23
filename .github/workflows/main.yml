@@ -1,13 +1,18 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-name: Portfolio Optimization Notebook Runner
+name: Portfolio Optimization QA
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      test_image:
+        description: "Test image that runs the QA cases"
+        required: false
+        default: "nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,134 +22,112 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
-        with:
-          persist-credentials: false
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a  # v4
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: uv sync --group dev
-
-      - name: Run tests
-        run: uv run pytest tests/ -v
-
-  run-notebooks:
-    needs: [test]
+  qa:
     runs-on: arc-runners-org-nvidia-ai-bp-1-gpu
+    timeout-minutes: 120
     env:
-      PYTHON_VERSION: 3.12
+      TEST_IMAGE: ${{ inputs.test_image || 'nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest' }}
     steps:
-      # Credentials are deliberately persisted here: the `git lfs pull` step
-      # below runs outside the action and needs the checkout credential helper.
+      # Credentials are deliberately persisted: `git lfs pull` below runs
+      # outside the action and needs the checkout credential helper.
       - name: Checkout repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4 # zizmor: ignore[artipacked]
 
       - name: Install Git LFS
         run: |
-          echo "===================== Install Git LFS ====================="
           sudo apt-get update
           sudo apt-get install -y git-lfs
           git lfs install
 
       - name: Pull Git LFS files
-        run: |
-          echo "===================== Pull LFS files ====================="
-          git lfs pull
+        run: git lfs pull
 
-      - name: Check System Info
-        run: |
-          echo "===================== System Info ====================="
-          more /etc/os-release
-          uname -a
-          docker version
-
-      - name: Run container and execute notebooks
+      # launchable.ipynb runs last: its setup cell re-syncs the venv with the
+      # extra matching the driver, and the script's notebooks want cuda13.
+      - name: Execute notebooks
         run: |
           docker run --gpus all --rm \
             -v "$(pwd):/workspace" \
             -w /workspace \
             nvcr.io/nvidia/pytorch:25.08-py3 \
-            bash -lc 'ci/utils/run_notebooks.sh cuda13'
+            bash -lc '
+              set -o pipefail
+              rc=0
+              ci/utils/run_notebooks.sh cuda13 || rc=1
+              export PATH="$HOME/.local/bin:$PATH"
+              cd notebooks
+              if uv run papermill launchable.ipynb launchable_brev_result.ipynb --kernel portfolio-opt --log-output 2>&1 \
+                | sed -E "s/\x27image\/png\x27: \x27[^\x27]*\x27/\x27image\/png\x27: \x27<elided>\x27/g" \
+                | tee launchable.papermill.log; then
+                echo "launchable.ipynb,PASS" | tee -a notebook_status.txt
+              else
+                echo "launchable.ipynb,FAIL" | tee -a notebook_status.txt
+                rc=1
+              fi
+              if [ -s launchable_brev_result.ipynb ] \
+                && uv run jupyter nbconvert --to html launchable_brev_result.ipynb 2>&1 | tee launchable_brev_result.nbconvert.log; then
+                echo "nbconvert:launchable_brev_result.ipynb,PASS" | tee -a notebook_status.txt
+              else
+                echo "nbconvert:launchable_brev_result.ipynb,FAIL" | tee -a notebook_status.txt
+                rc=1
+              fi
+              exit "$rc"
+            '
 
-      - name: Run GPU pytest suite
-        run: |
-          docker run --gpus all --rm \
-            -v "$(pwd):/workspace" \
-            -w /workspace \
-            nvcr.io/nvidia/pytorch:25.08-py3 \
-            bash -lc 'ci/utils/run_gpu_tests.sh cuda13'
-
-      # The cuda13 extra tracks cuOpt 26.04, which has no QCQP/SOCP support, so
-      # the variance-cap tests skip in the pass above. Re-run them against the
-      # cuOpt-only 26.06 extra so that path is actually exercised.
-      # Drop this once cuml-cu13 26.06 ships and cuda13 covers both.
-      - name: Run SOCP tests (cuOpt 26.06)
-        run: |
-          docker run --gpus all --rm \
-            -v "$(pwd):/workspace" \
-            -w /workspace \
-            nvcr.io/nvidia/pytorch:25.08-py3 \
-            bash -lc 'ci/utils/run_gpu_tests.sh cuda13-socp'
-
-      - name: Verify results
-        if: success()
+      - name: Run Test Code
+        if: always()
         env:
           TEST_DOCKER_PULL_KEY: ${{ secrets.TEST_DOCKER_PULL_KEY }}
         run: |
           set -euo pipefail
-          echo "Checking for generated files...."
-          test -s notebooks/mean_variance_basic_result.html
-          test -s notebooks/cvar_basic_result.html
-          test -s notebooks/efficient_frontier_result.html
-          test -s notebooks/rebalancing_strategies_result.html
-          ls -lh notebooks/*result* notebooks/*.papermill.log notebooks/*.nbconvert.log notebooks/notebook_status.txt
-          cd notebooks
-          echo "$TEST_DOCKER_PULL_KEY" |docker login nvcr.io --username  '$oauthtoken' --password-stdin
+          missing=0
+          for f in cvar_basic efficient_frontier rebalancing_strategies launchable_brev; do
+            if [ ! -s "notebooks/${f}_result.html" ]; then
+              echo "::error::notebooks/${f}_result.html not found"
+              missing=1
+            fi
+          done
+          if [ -z "${TEST_DOCKER_PULL_KEY}" ]; then
+            echo "::error::secret TEST_DOCKER_PULL_KEY is not set"
+            exit 1
+          fi
+          echo "${TEST_DOCKER_PULL_KEY}" | docker login nvcr.io --username '$oauthtoken' --password-stdin
+          in=/app/input/quantitative_portfolio_optimization
           docker run --rm \
-            -v ./cvar_basic_result.html:/app/input/quantitative_portfolio_optimization/cvar_basic.html  \
-            -v ./efficient_frontier_result.html:/app/input/quantitative_portfolio_optimization/efficient_frontier.html  \
-            -v ./rebalancing_strategies_result.html:/app/input/quantitative_portfolio_optimization/rebalancing_strategies.html  \
+            -v "$(pwd)/notebooks/cvar_basic_result.html:${in}/cvar_basic.html" \
+            -v "$(pwd)/notebooks/efficient_frontier_result.html:${in}/efficient_frontier.html" \
+            -v "$(pwd)/notebooks/rebalancing_strategies_result.html:${in}/rebalancing_strategies.html" \
+            -v "$(pwd)/notebooks/launchable_brev_result.html:${in}/launchable_brev_result.html" \
             -v "$(pwd):/workspace" \
-            nvcr.io/rw983xdqtcdp/auto_test_team/blueprint-github-test-image:latest \
-            pytest -m quantitative_portfolio_optimization --disable-warnings --html=/workspace/quantitative_portfolio_optimization.html --self-contained-html
+            "${TEST_IMAGE}" \
+            pytest -m quantitative_portfolio_optimization --timeout=900 --disable-warnings \
+              --html=/workspace/portfolio-optimization.html --self-contained-html
+          exit "$missing"
 
-
-      - name: Upload notebook results as artifacts
+      - name: Upload the result notebooks and pytest report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: notebook-results
+          name: qa-notebook-results
           path: |
-             notebooks/mean_variance_basic_result.html
-             notebooks/mean_variance_basic_result.ipynb
-             notebooks/cvar_basic_result.html
-             notebooks/cvar_basic_result.ipynb
-             notebooks/efficient_frontier_result.html
-             notebooks/efficient_frontier_result.ipynb
-             notebooks/rebalancing_strategies_result.html
-             notebooks/rebalancing_strategies_result.ipynb
-             notebooks/quantitative_portfolio_optimization.html
-             notebooks/*.papermill.log
-             notebooks/*.nbconvert.log
-             notebooks/notebook_status.txt
+            notebooks/*_result.html
+            notebooks/*.papermill.log
+            notebooks/*.nbconvert.log
+            notebooks/notebook_status.txt
+            portfolio-optimization.html
           retention-days: 30
 
       - name: Set result output
         id: set_result
         if: always()
+        env:
+          JOB_STATUS: ${{ job.status }}
         run: |
-          echo "RESULT=$(if [ ${{ job.status }} == 'success' ]; then echo 'PASS'; else echo 'FAIL'; fi)" >> $GITHUB_OUTPUT
+          if [ "${JOB_STATUS}" == "success" ]; then
+            echo "RESULT=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "RESULT=FAIL" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Send mail
         uses: dawidd6/action-send-mail@6e71c855c9a091d80a519621b9fd3e8d252ca40c
@@ -154,17 +137,13 @@ jobs:
           server_port: 587
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-
           subject: "QA Test Workflow Result for ${{ github.repository }}"
           to: Github-Action-Blueprint-QA@nvidia.com
           from: github-workflow-notification@gmail.com
           html_body: |
             <p>Hello,</p>
-
             <p>The workflow for repository: <strong>${{ github.repository }}</strong> has completed.<br>
             <strong>Result:</strong> ${{ steps.set_result.outputs.RESULT }}</p>
-
             <p>You can review the details on GitHub:<br>
             <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}</a></p>
-
             <p>Thanks!</p>
